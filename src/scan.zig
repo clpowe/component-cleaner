@@ -155,10 +155,8 @@ pub fn findUsage(
     var walker = try dir.walk(allocator);
     defer walker.deinit();
 
-    const open_tag = try std.fmt.allocPrint(allocator, "<{s}", .{component_name});
-    defer allocator.free(open_tag);
-    const import_name = try std.fmt.allocPrint(allocator, "import {s}", .{component_name});
-    defer allocator.free(import_name);
+    const kebab = try toKebab(allocator, component_name);
+    defer allocator.free(kebab);
 
     var read_buf: [64 * 1024]u8 = undefined;
 
@@ -173,9 +171,7 @@ pub fn findUsage(
         const content = file_reader.interface.allocRemaining(allocator, std.Io.Limit.limited(max_file_bytes)) catch continue;
         defer allocator.free(content);
 
-        if (std.mem.indexOf(u8, content, open_tag) != null or
-            std.mem.indexOf(u8, content, import_name) != null)
-        {
+        if (isUsed(content, component_name, kebab)) {
             return try allocator.dupe(u8, entry.path);
         }
     }
@@ -204,6 +200,25 @@ test "toKebab converts PascalCase" {
     const k = try toKebab(std.testing.allocator, "BaseButton");
     defer std.testing.allocator.free(k);
     try std.testing.expectEqualStrings("base-button", k);
+}
+
+// Single-check uses the same whole-word matching as the unused finder, so a
+// prefix like "BaseButt" must NOT match "BaseButton" (UAT-07).
+test "findUsage matches whole words only" {
+    const io = std.testing.io;
+    const a = std.testing.allocator;
+
+    const used = try findUsage(io, a, "BaseButton", "test-fixtures");
+    defer if (used) |x| a.free(x);
+    try std.testing.expect(used != null); // UAT-05
+
+    const missing = try findUsage(io, a, "NopeNotHere", "test-fixtures");
+    defer if (missing) |x| a.free(x);
+    try std.testing.expect(missing == null); // UAT-06
+
+    const prefix = try findUsage(io, a, "BaseButt", "test-fixtures");
+    defer if (prefix) |x| a.free(x);
+    try std.testing.expect(prefix == null); // UAT-07: prefix is not a match
 }
 
 // Exercises `baseName`/`toKebab`/`findUnused` end to end (and forces them to

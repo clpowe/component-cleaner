@@ -17,6 +17,24 @@ zero-native CLI on `PATH`; system WebView (not CEF); test data is the bundled
 
 ---
 
+## Pre-flight (automated, against the real scan code)
+
+Backend logic behind UAT-02–07 was exercised against `test-fixtures` before the
+manual pass:
+
+- UAT-02/03 ✓ — 4 components; OldBanner + UnusedWidget flagged; BaseButton
+  (Pascal+import) and BaseCard (kebab) not flagged.
+- UAT-05/06 ✓ — `BaseButton` → used; `NopeNotHere` → unused.
+- UAT-07 — surfaced a defect (single-check matched the prefix `BaseButt`);
+  `findUsage` was switched to whole-word matching and a regression test added.
+- UAT-04 — premise corrected: `app/` holds component files, so it is not an
+  empty state.
+
+GUI-only steps (UAT-00/01/08/09) remain manual — they need native window and
+file-dialog interaction.
+
+---
+
 ## Personas
 
 - **Maya — Primary cleaner.** Mid-level Vue dev, large SFC codebase, wants dead
@@ -61,11 +79,14 @@ Format: **Pre** = preconditions, **Steps**, **Expect**. Concrete data is
 - Expect (within UAT-02): BaseButton (Pascal tag + import) and BaseCard (kebab
   `<base-card>`) are *not* listed unused. Confirms both matchers.
 
-**UAT-04 — "Nothing to clean" path**
-- Pre: point both pickers at `test-fixtures/app` (no component definitions
-  there).
+**UAT-04 — Empty-state (no component files)**
+- Pre: Components folder = a directory with no `.vue/.tsx/.jsx` (e.g. `assets`);
+  Source root = `test-fixtures`.
 - Steps: Find unused.
 - Expect: "0 components scanned" and the empty-state message, no list, no crash.
+- Note: pointing Components at `test-fixtures/app` instead yields **2**
+  components (App.vue, HomePage.vue *are* component files), both flagged unused
+  — not an empty state. Use a component-less folder for the empty case.
 
 ### Single-check (Maya)
 
@@ -82,6 +103,9 @@ Format: **Pre** = preconditions, **Steps**, **Expect**. Concrete data is
 - Pre: Source root = `test-fixtures`.
 - Steps: Check `BaseButt` (a prefix of BaseButton).
 - Expect: "Appears unused" — a prefix does **not** match (no false positive).
+- Note: single-check shares the unused-finder's whole-word matcher; enforced by
+  the `findUsage matches whole words only` regression test. (Earlier the
+  single-check used substring matching and wrongly reported this as used — fixed.)
 
 ### First-run / error handling (Devon)
 
